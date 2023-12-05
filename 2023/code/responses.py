@@ -9,7 +9,7 @@ Sensitivities are validated by finite difference.
 """
 
 
-def constraint(x, alpha=0.5):
+def constraint(x):
     """
     Calculation of mass constraint value and sensitivities.
 
