@@ -9,7 +9,7 @@ Sensitivities are validated by finite difference.
 """
 
 
-def constraint(x, alpha=0.5, scaling=1.0):
+def constraint(x, alpha=0.5):
     """
     Calculation of mass constraint value and sensitivities.
 
@@ -19,9 +19,7 @@ def constraint(x, alpha=0.5, scaling=1.0):
     :return: Constraint value and sensitivities
     """
 
-    tmp = 1 / (alpha * x.size)
-
-    return scaling * (tmp * np.sum(x) - 1), scaling * tmp * np.ones_like(x)
+    return np.sum(x), np.ones_like(x)
 
 
 def assembly(x, k=1.0):
@@ -32,8 +30,11 @@ def assembly(x, k=1.0):
     :param k: Element stiffness Ebt/L
     :return: Stiffness matrix
     """
+
+    # Element stiffness matrix
     Ke = k * np.array([[1, -1], [-1, 1]], dtype=float)
 
+    # Assembly of global stiffness matrix
     K = np.zeros((x.size + 1, x.size + 1), dtype=float)
     for i in range(x.size):
         K[i:i + 2, :][:, i:i + 2] += x[i] * Ke
@@ -50,8 +51,10 @@ def solve(K, f):
     :return: Displacement vector
     """
 
+    # Application of boundary conditions and solving the system of equations
     u = np.zeros_like(f)
     u[1::] = np.linalg.solve(K[1::, :][:, 1::], f[1::])
+
     return u
 
 
@@ -85,29 +88,51 @@ def objective(x, scaling=1.0):
     :return: Objective value and sensitivities
     """
 
+    # Forward analysis
+    u, Ke = analysis(x)
+
+    # Backward analysis
+    v = u.copy()
+
     # if not self-adjoint (meaning dfdu is not force), then
     # v = solve(K, dfdu)
     # note: use same boundary conditions as in forward analysis
 
-    u, Ke = analysis(x)
-
+    # Sensitivity analysis
     dfdx = np.zeros_like(x, dtype=float)
     for i in range(x.size):
         ue = u[i:i+2]
-        dfdx[i] = - ue @ (Ke @ ue)
+        ve = v[i:i+2]
+        dfdx[i] = - ve @ (Ke @ ue)
 
     return scaling * u[-1], scaling * dfdx
 
 
 def finite_difference(fun, x0, h=1e-6):
+    """
+    Given a response function (fun), finite difference is used to verify the analytical sensitivities.
+
+    :param fun: Response function
+    :param x0: Design variables
+    :param h: Perturbation magnitude
+    :return: Analytical and finite difference sensitivities and their relative error
+    """
+
+    # Function value and corresponding sensitivities
     f, dfdx_a = fun(x0)
+
+    # Sensitivities using finite difference
     df = np.zeros_like(x0)
     for i in range(x0.size):
         x = x0.copy()
         x[i] += h
         df[i], _ = fun(x)
+
     dfdx_fd = (df - f) / h
+
+    # Relative error
     relative_error = (dfdx_fd - dfdx_a) / dfdx_a
+
     return dfdx_a, dfdx_fd, relative_error
 
 
@@ -119,7 +144,9 @@ if __name__ == '__main__':
     x0 = 0.5 * np.ones(4, dtype=float)
     # x0 = np.random.rand(10)
 
+    # Finite difference of constraint function
     dg_ref = np.ones_like(x0) / (0.5 * x0.size)
+
     dg_a, dg_fd, dg_error = finite_difference(constraint, x0)
 
     print(f'Constraint \n'
@@ -128,7 +155,8 @@ if __name__ == '__main__':
           f'Finite difference = {dg_fd} \n'
           f'Relative error = {dg_error} \n')
 
-    df_ref = -1 / np.ones_like(x0)**2
+    # Finite difference of constraint function
+    df_ref = -1 / x0**2
     df_a, df_fd, df_error = finite_difference(objective, x0)
 
     print(f'Objective \n'
@@ -136,4 +164,3 @@ if __name__ == '__main__':
           f'Analytical = {df_a} \n'
           f'Finite difference = {df_fd} \n'
           f'Relative error = {df_error} \n')
-
