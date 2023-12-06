@@ -9,8 +9,8 @@ x = np.random.rand(2)
 x_old1, x_old2 = x.copy(), x.copy()
 
 # Set move limit parameters
-ml = 0.1 * np.ones_like(x)
-ml_incr, ml_decr = 1.2, 0.7
+ml = 0.05 * np.ones_like(x)
+ml_incr, ml_decr = 1.2, 0.4
 
 # Set global bounds
 x_min, x_max = np.zeros_like(x), np.ones_like(x)
@@ -27,12 +27,16 @@ bounds = np.zeros((x.size, 2), dtype=float)  # Initialization of variable bounds
 
 # Sequential linear programming loop
 while dx > 1e-4 and count < 50:
+    count += 1
 
     # Objective value and sensitivities
     f, dfdx = objective(x, scaling=1/f0)
 
     # Constraint value and sensitivities
-    g, dgdx = constraint(x, alpha)
+    g, dgdx = constraint(x)
+
+    # Print current status
+    print(f'{count:2d}, f: {f:1.3f}, g: {g: 1.3f}, solution: {x}')
 
     # Set maximum move limit depending on oscillations
     sign = (x - x_old1) * (x_old1 - x_old2)
@@ -44,18 +48,15 @@ while dx > 1e-4 and count < 50:
     bounds[:, 1] = np.minimum(x + ml, x_max)
 
     # Solve linearized minimization problem
-    res = linprog(dfdx, A_ub=dgdx[np.newaxis, :], b_ub=[alpha * x.size], bounds=bounds)
+    res = linprog(dfdx, A_ub=dgdx[np.newaxis, :], b_ub=[dgdx @ x - g], bounds=bounds)
 
     # Mean absolute design change
-    dx = np.mean(np.abs(res.x[:] - x))
+    dx = np.mean(np.abs(res.x - x))
 
     # Update history and design variables
     x_old2[:] = x_old1
     x_old1[:] = x
     x[:] = res.x
-
-    count += 1
-    print(f'{count:2d}, f: {f:1.2f}, g: {g / (alpha * x.size) - 1.0: 1.2f}, solution: {x}')
 
 f, _ = objective(x)
 print(f'Solution = {x}, with displacement u = {f}')
