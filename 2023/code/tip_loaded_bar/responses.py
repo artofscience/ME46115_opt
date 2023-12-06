@@ -9,7 +9,7 @@ Sensitivities are validated by finite difference.
 """
 
 
-def constraint(x):
+def constraint(x, alpha=0.5, scaling=1.0):
     """
     Calculation of mass constraint value and sensitivities.
 
@@ -19,7 +19,10 @@ def constraint(x):
     :return: Constraint value and sensitivities
     """
 
-    return np.sum(x), np.ones_like(x)
+    g = np.sum(x) / (alpha * x.size) - 1
+    dgdx = np.ones_like(x) / (alpha * x.size)
+
+    return scaling * g, scaling * dgdx
 
 
 def assembly(x, k=1.0):
@@ -35,7 +38,7 @@ def assembly(x, k=1.0):
     Ke = k * np.array([[1, -1], [-1, 1]], dtype=float)
 
     # Assembly of global stiffness matrix
-    K = np.zeros((x.size + 1, x.size + 1), dtype=float)
+    K = np.zeros((x.size + 1, x.size + 1), dtype=float)  # number of dof = number of elements + 1
     for i in range(x.size):
         K[i:i + 2, :][:, i:i + 2] += x[i] * Ke
 
@@ -58,27 +61,6 @@ def solve(K, f):
     return u
 
 
-def analysis(x):
-    """
-    Calculates the displacement for a tip-loaded bar.
-
-    :param x: Design variables
-    :return: Displacement vector
-    """
-
-    # Stiffness matrix
-    K, Ke = assembly(x, k=1.0)
-
-    # Force
-    f = np.zeros(x.size + 1, dtype=float)
-    f[-1] = 1.0
-
-    # Displacement
-    u = solve(K, f)
-
-    return u, Ke
-
-
 def objective(x, scaling=1.0):
     """
     Calculation of objective value and sensitivities
@@ -89,23 +71,28 @@ def objective(x, scaling=1.0):
     """
 
     # Forward analysis
-    u, Ke = analysis(x)
+    K, Ke = assembly(x)
+
+    # Force
+    p = np.zeros(x.size + 1, dtype=float)
+    p[-1] = 1.0
+
+    # Forward analysis
+    u = solve(K, p)
+
+    # Objective value
+    f = p @ u  # or equivalently u[-1]
 
     # Backward analysis
-    v = u.copy()
-
-    # if not self-adjoint (meaning dfdu is not force), then
-    # v = solve(K, dfdu)
-    # note: use same boundary conditions as in forward analysis
+    # v = solve(K, dfdu), but we know v = u, since dfdu = f
 
     # Sensitivity analysis
     dfdx = np.zeros_like(x, dtype=float)
     for i in range(x.size):
         ue = u[i:i+2]
-        ve = v[i:i+2]
-        dfdx[i] = - ve @ (Ke @ ue)
+        dfdx[i] = - ue @ (Ke @ ue)
 
-    return scaling * u[-1], scaling * dfdx
+    return scaling * f, scaling * dfdx
 
 
 def finite_difference(fun, x0, h=1e-6):
@@ -119,7 +106,7 @@ def finite_difference(fun, x0, h=1e-6):
     """
 
     # Function value and corresponding sensitivities
-    f, dfdx_a = fun(x0)
+    f0, _ = fun(x0)
 
     # Sensitivities using finite difference
     df = np.zeros_like(x0)
@@ -128,12 +115,7 @@ def finite_difference(fun, x0, h=1e-6):
         x[i] += h
         df[i], _ = fun(x)
 
-    dfdx_fd = (df - f) / h
-
-    # Relative error
-    relative_error = (dfdx_fd - dfdx_a) / dfdx_a
-
-    return dfdx_a, dfdx_fd, relative_error
+    return (df - f0) / h
 
 
 if __name__ == '__main__':
@@ -141,13 +123,16 @@ if __name__ == '__main__':
     Check consistency of the sensitivities (objective and constraint) using finite differences.
     """
 
+    alpha = 0.5
     x0 = 0.5 * np.ones(4, dtype=float)
     # x0 = np.random.rand(10)
 
     # Finite difference of constraint function
-    dg_ref = np.ones_like(x0) / (0.5 * x0.size)
+    dg_ref = np.ones_like(x0) / (alpha * x0.size)
+    _, dg_a = constraint(x0)
+    dg_fd = finite_difference(constraint, x0)
 
-    dg_a, dg_fd, dg_error = finite_difference(constraint, x0)
+    dg_error = (dg_fd - dg_a) / dg_a
 
     print(f'Constraint \n'
           f'Reference = {dg_ref} \n'
@@ -157,7 +142,10 @@ if __name__ == '__main__':
 
     # Finite difference of constraint function
     df_ref = -1 / x0**2
-    df_a, df_fd, df_error = finite_difference(objective, x0)
+    _, df_a = objective(x0)
+    df_fd = finite_difference(objective, x0)
+
+    df_error = (df_fd - df_a) / df_a
 
     print(f'Objective \n'
           f'Reference = {df_ref} \n'
