@@ -124,8 +124,7 @@ if __name__ == '__main__':
     """
 
     alpha = 0.5
-    x0 = 0.5 * np.ones(4, dtype=float)
-    # x0 = np.random.rand(10)
+    x0 = np.random.rand(3)
 
     # Finite difference of constraint function
     dg_ref = np.ones_like(x0) / (alpha * x0.size)

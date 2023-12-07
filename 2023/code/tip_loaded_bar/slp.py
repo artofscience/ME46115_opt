@@ -2,32 +2,38 @@ from responses import constraint, objective
 import numpy as np
 from scipy.optimize import linprog
 
+# Set number of springs / design variables
+n = 2
+
+# Set mass-fraction
+alpha = 0.5  # maximum of alpha material-usage allowed
+
+# Set maximum number of design iterations
+iter_max = 50
+
+# Set design change termination criterion
+design_change_threshold = 1e-4
+
+# Set move-limit parameters
+ml_init, ml_incr, ml_decr = 0.05, 1.2, 0.5
+
 # Set initial design
-x = np.random.rand(2)
+x = np.linspace(0.1, 0.9, n)
+
+# Initialize move-limits
+ml = ml_init * np.ones_like(x)
 
 # Initialize history
 x_old1, x_old2 = x.copy(), x.copy()
 
-# Set move limit parameters
-ml = 0.05 * np.ones_like(x)
-ml_incr, ml_decr = 1.2, 0.4
-
 # Set global bounds
 x_min, x_max = np.zeros_like(x), np.ones_like(x)
 
-# Objective value of initial design
+# Objective value of initial design, to be used in scaling
 f0, _ = objective(x)
 
-# Set mass-fraction
-alpha = 0.5
-
-count = 0  # Initialization of counter
-dx = 1.0  # Initialization of design change
-bounds = np.zeros((x.size, 2), dtype=float)  # Initialization of variable bounds
-
 # Sequential linear programming loop
-while dx > 1e-4 and count < 50:
-    count += 1
+for count in range(iter_max):
 
     # Objective value and sensitivities
     f, dfdx = objective(x, scaling=1/f0)
@@ -44,14 +50,16 @@ while dx > 1e-4 and count < 50:
     ml[sign < 0] = ml_decr * ml[sign < 0]
 
     # Set lower and upper bounds
-    bounds[:, 0] = np.maximum(x - ml, x_min)
-    bounds[:, 1] = np.minimum(x + ml, x_max)
+    lb = np.maximum(x - ml, x_min)
+    ub = np.minimum(x + ml, x_max)
 
     # Solve linearized minimization problem
-    res = linprog(dfdx, A_ub=dgdx[np.newaxis, :], b_ub=[dgdx @ x - g], bounds=bounds)
+    res = linprog(dfdx, A_ub=dgdx[np.newaxis, :],
+                  b_ub=[dgdx @ x - g], bounds=np.vstack((lb, ub)).T)
 
     # Mean absolute design change
-    dx = np.mean(np.abs(res.x - x))
+    if np.mean(np.abs(res.x - x)) < design_change_threshold:
+        break
 
     # Update history and design variables
     x_old2[:] = x_old1
@@ -59,16 +67,4 @@ while dx > 1e-4 and count < 50:
     x[:] = res.x
 
 f, _ = objective(x)
-print(f'Solution = {x}, with displacement u = {f}')
-
-
-
-
-
-
-
-
-
-
-
-
+print(f'\nSolution = {x} \nDisplacement u = {f}')

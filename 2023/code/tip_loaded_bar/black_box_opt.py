@@ -2,8 +2,8 @@ import numpy as np
 from scipy.optimize import minimize, Bounds, LinearConstraint
 from responses import objective
 
-# Initial design
-x0 = np.random.rand(10)
+# Set initial design
+x0 = np.linspace(0.1, 0.9, 2)
 
 # Set global variable bounds
 bounds = Bounds(np.zeros_like(x0), np.ones_like(x0))
