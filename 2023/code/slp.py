@@ -1,10 +1,12 @@
-from responses import constraint, objective
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.optimize import linprog
 
+from responses import constraint, objective_bar, objective_beam
 
-def tip_loaded_bar(n: int = 2, alpha: float = 0.5, max_iter: int = 50, max_dx: float = 1e-4,
-                   ml_init: float = 0.05, ml_incr: float = 1.2, ml_decr: float = 0.5):
+
+def slp(objective, n: int = 2, alpha: float = 0.5, max_iter: int = 50, max_dx: float = 1e-4,
+        ml_init: float = 0.05, ml_incr: float = 1.2, ml_decr: float = 0.5):
     """
     Solves an optimization problem for minimizing displacement of a tip-loaded bar
     given restricted mass.
@@ -16,7 +18,7 @@ def tip_loaded_bar(n: int = 2, alpha: float = 0.5, max_iter: int = 50, max_dx: f
     :param ml_init: Initial move-limit
     :param ml_incr: Move-limit increase parameter
     :param ml_decr: Move-limit decrease parameter
-    :return:
+    :return: Optimized design variables
     """
 
     # Set initial design
@@ -44,7 +46,7 @@ def tip_loaded_bar(n: int = 2, alpha: float = 0.5, max_iter: int = 50, max_dx: f
         g, dgdx = constraint(x, alpha)
 
         # Print current status
-        print(f'{count:2d}, f: {f:1.3f}, g: {g: 1.3f}, solution: {x}')
+        print(f'{count:2d}, f: {f:1.3f}, g: {g: 1.3f}, x: {x}')
 
         # Set maximum move limit depending on oscillations
         sign = (x - x_old1) * (x_old1 - x_old2)
@@ -72,7 +74,24 @@ def tip_loaded_bar(n: int = 2, alpha: float = 0.5, max_iter: int = 50, max_dx: f
 
 
 if __name__ == "__main__":
-    x = tip_loaded_bar(2)
 
-    f, _ = objective(x)
-    print(f'\nSolution = {x} \nDisplacement u = {f}')
+    # Number of segments / elements
+    n = 3
+
+    # Solve bar optimization problem
+    x = slp(objective_bar, n)
+    f, _ = objective_bar(x)
+    print(f'\nSolution bar = {x} \nDisplacement u = {f}\n')
+
+    # Solve beam optimization problem
+    y = slp(objective_beam, n)
+    f, _ = objective_beam(y)
+    print(f'\nSolution beam = {y} \nDisplacement v = {f}\n')
+
+    # Plot design variables over the length of the bar / beam
+    fig, ax = plt.subplots()
+    fig.suptitle('Design variable values over length')
+    plt.plot(range(x.size), x, 'ro-')
+    plt.plot(range(y.size), y, 'bo-')
+    ax.set_ylim([0, 1])
+    plt.show()
