@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.optimize import minimize, Bounds, LinearConstraint
-from responses import objective
+from responses import objective_beam
 
 # Set initial design
-x0 = np.linspace(0.1, 0.9, 2)
+x0 = np.linspace(0.1, 0.9, 3)
 
 # Set global variable bounds
 bounds = Bounds(np.zeros_like(x0), np.ones_like(x0))
@@ -19,7 +19,7 @@ linear_constraint = LinearConstraint(np.ones_like(x0), -np.inf, 0.5 * x0.size)
 opt = {'verbose': 2, 'maxiter': 100, 'disp': True}
 
 # Solve the nonlinear minimization problem
-res = minimize(objective, x0, jac=True, method='trust-constr',
+res = minimize(objective_beam, x0, jac=True, method='trust-constr',
                constraints=linear_constraint, bounds=bounds,
                tol=1e-6, options=opt)
 
