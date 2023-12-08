@@ -25,16 +25,22 @@ def constraint(x, alpha=0.5, scaling=1.0):
     return scaling * g, scaling * dgdx
 
 
-def assembly(x, k=1.0):
+def assembly_bar(x, E=1.0, b=1.0, t=1.0, L=1.0):
     """
     Assembly of global stiffness matrix.
 
     :param x: Design variables
-    :param k: Element stiffness Ebt/L
+    :param E: Young's modulus
+    :param b: Beam width
+    :param t: Maximum beam thickness
+    :param L: Total beam length
     :return: Stiffness matrix
     """
+    # Element length
+    l = L / x.size
 
     # Element stiffness matrix
+    k = E * b * t / l
     Ke = k * np.array([[1, -1], [-1, 1]], dtype=float)
 
     # Assembly of global stiffness matrix
@@ -45,23 +51,7 @@ def assembly(x, k=1.0):
     return K, Ke
 
 
-def solve(K, f):
-    """
-    Calculates the displacement vector given a stiffness matrix and force vector.
-
-    :param K: Stiffness matrix
-    :param f: Force vector
-    :return: Displacement vector
-    """
-
-    # Application of boundary conditions and solving the system of equations
-    u = np.zeros_like(f)
-    u[1::] = np.linalg.solve(K[1::, :][:, 1::], f[1::])
-
-    return u
-
-
-def objective(x, scaling=1.0):
+def objective_bar(x, scaling=1.0):
     """
     Calculation of objective value and sensitivities
 
@@ -71,14 +61,15 @@ def objective(x, scaling=1.0):
     """
 
     # Forward analysis
-    K, Ke = assembly(x)
+    K, Ke = assembly_bar(x)
 
     # Force
     p = np.zeros(x.size + 1, dtype=float)
     p[-1] = 1.0
 
-    # Forward analysis
-    u = solve(K, p)
+    # Application of boundary conditions and solving the system of equations
+    u = np.zeros_like(p)
+    u[1::] = np.linalg.solve(K[1::, :][:, 1::], p[1::])
 
     # Objective value
     f = p @ u  # or equivalently u[-1]
@@ -91,6 +82,72 @@ def objective(x, scaling=1.0):
     for i in range(x.size):
         ue = u[i:i+2]
         dfdx[i] = - ue @ (Ke @ ue)
+
+    return scaling * f, scaling * dfdx
+
+
+def assembly_beam(x, E=1.0, b=1.0, t=1.0, L=1.0):
+    """
+    Assembly of global stiffness matrix.
+
+    :param x: Design variables
+    :param E: Young's modulus
+    :param b: Beam width
+    :param t: Maximum beam thickness
+    :param L: Total beam length
+    :return: Stiffness matrix
+    """
+
+    # Element length
+    l = L / x.size
+
+    # Element stiffness matrix
+    k = (E * b * t**3) / (12 * l**3)
+    Ke = k * np.array([[12, 6*l, -12, 6*l],
+                       [6*l, 4*l**2, -6*l, 2*l**2],
+                       [-12, -6*l, 12, -6*l],
+                       [6*l, 2*l**2, -6*l, 4*l**2]], dtype=float)
+
+    # Assembly of global stiffness matrix
+    n = 2 * (x.size + 1)
+    K = np.zeros((n, n), dtype=float)  # number of dof = 2 * number of nodes
+    for i in range(x.size):
+        K[2*i:2*i + 4, :][:, 2*i:2*i + 4] += x[i]**3 * Ke
+
+    return K, Ke
+
+
+def objective_beam(x, scaling=1.0):
+    """
+    Calculation of objective value and sensitivities
+
+    :param x: Design variables
+    :param scaling: Scaling coefficient
+    :return: Objective value and sensitivities
+    """
+
+    # Forward analysis
+    K, Ke = assembly_beam(x)
+
+    # Force
+    p = np.zeros(2 * (x.size + 1), dtype=float)
+    p[-2] = 1.0
+
+    # Application of boundary conditions and solving the system of equations
+    u = np.zeros_like(p)
+    u[2::] = np.linalg.solve(K[2::, :][:, 2::], p[2::])
+
+    # Objective value
+    f = p @ u  # or equivalently u[-2]
+
+    # Backward analysis
+    # v = solve(K, dfdu), but we know v = u, since dfdu = f
+
+    # Sensitivity analysis
+    dfdx = np.zeros_like(x, dtype=float)
+    for i in range(x.size):
+        ue = u[2*i:2*i+4]
+        dfdx[i] = - 3 * x[i]**2 * ue @ (Ke @ ue)
 
     return scaling * f, scaling * dfdx
 
@@ -139,15 +196,26 @@ if __name__ == '__main__':
           f'Finite difference = {dg_fd} \n'
           f'Relative error = {dg_error} \n')
 
-    # Finite difference of constraint function
+    # Finite difference of objective function
     df_ref = -1 / x0**2
-    _, df_a = objective(x0)
-    df_fd = finite_difference(objective, x0)
+    _, df_a = objective_bar(x0)
+    df_fd = finite_difference(objective_bar, x0)
 
     df_error = (df_fd - df_a) / df_a
 
-    print(f'Objective \n'
+    print(f'Objective BAR \n'
           f'Reference = {df_ref} \n'
+          f'Analytical = {df_a} \n'
+          f'Finite difference = {df_fd} \n'
+          f'Relative error = {df_error} \n')
+
+    # Finite difference of objective function
+    _, df_a = objective_beam(x0)
+    df_fd = finite_difference(objective_beam, x0)
+
+    df_error = (df_fd - df_a) / df_a
+
+    print(f'Objective BEAM \n'
           f'Analytical = {df_a} \n'
           f'Finite difference = {df_fd} \n'
           f'Relative error = {df_error} \n')
