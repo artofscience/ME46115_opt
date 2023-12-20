@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.patches import Rectangle
 from scipy.optimize import linprog
 
 from responses import constraint, objective_bar, objective_beam
@@ -76,7 +77,7 @@ def slp(objective, n: int = 2, alpha: float = 0.5, max_iter: int = 50, max_dx: f
 if __name__ == "__main__":
 
     # Number of segments / elements
-    n = 3
+    n = 20
 
     # Solve bar optimization problem
     x = slp(objective_bar, n)
@@ -89,9 +90,22 @@ if __name__ == "__main__":
     print(f'\nSolution beam = {y} \nDisplacement v = {f}\n')
 
     # Plot design variables over the length of the bar / beam
-    fig, ax = plt.subplots()
-    fig.suptitle('Design variable values over length')
-    plt.plot(range(x.size), x, 'ro-')
-    plt.plot(range(y.size), y, 'bo-')
-    ax.set_ylim([0, 1])
+    fig, ax = plt.subplots(2)
+    fig.suptitle('Optimized thickness over length for tip-loaded bar/beam')
+    for i in range(x.size):
+        ax[0].add_artist(Rectangle((i, -x[i]/2), width=1.0, height=x[i]))
+        ax[1].add_artist(Rectangle((i, -y[i]/2), width=1.0, height=y[i]))
+
+    fig.tight_layout(pad=3.0)
+
+    ax[0].title.set_text('Optimized bar')
+    ax[0].set_ylim([-0.5, 0.5])
+    ax[0].set_xlim([0, n])
+    ax[0].plot(0.5 + np.arange(x.size), x/2, 'ro-')
+
+    ax[1].title.set_text('Optimized beam')
+    ax[1].set_ylim([-0.5, 0.5])
+    ax[1].set_xlim([0, n])
+    ax[1].plot(0.5 + np.arange(y.size), y/2, 'ro-')
+
     plt.show()
